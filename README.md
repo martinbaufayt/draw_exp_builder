@@ -2,6 +2,12 @@
 
 A custom draw widget for ArcGIS Experience Builder.
 
+> **Note:** This repository is a personal project used to explore GitHub workflows and Claude Code capabilities. It is based on an open-source widget originally developed by the community.
+
+## Original Authors
+
+Robert Scheitlin, Jeffrey Thompson, Brian McLeer, Adrien Hoff, Mattias Ekström, Jérôme Ray
+
 ## Overview
 
 `draw-advanced` is a TypeScript/React widget for ArcGIS Experience Builder that extends the native drawing capabilities with advanced geometry tools, measurement display, and data management features.
