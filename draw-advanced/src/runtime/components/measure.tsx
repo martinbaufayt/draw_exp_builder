@@ -3221,12 +3221,10 @@ const Measure = forwardRef<MeasureRef, MeasureProps>((props, ref) => {
 						const [projected] = projectOperator.executeMany([labelPoint], SpatialReference.WGS84) as __esri.Point[];
 						if (projected) {
 							centerText = `
-Center Lat: ${projected.y.toFixed(otherRound)}
-Center Lon: ${projected.x.toFixed(otherRound)}`;
+Lon(X)/Lat(Y): ${projected.x.toFixed(otherRound)}, ${projected.y.toFixed(otherRound)}`;
 						} else {
 							centerText = `
-Center X: ${labelPoint.x.toFixed(otherRound)}
-Center Y: ${labelPoint.y.toFixed(otherRound)}`;
+X/Y: ${labelPoint.x.toFixed(otherRound)}, ${labelPoint.y.toFixed(otherRound)}`;
 						}
 					} catch (projErr) {
 						centerText = `
@@ -3625,8 +3623,7 @@ Center Y: ${labelPoint.y.toFixed(otherRound)}`;
 							const [projected] = projectOperator.executeMany([labelPoint], SpatialReference.WGS84) as __esri.Point[];
 							if (projected) {
 								centerText = `
-Center Lat: ${projected.y.toFixed(otherRound)}
-Center Lon: ${projected.x.toFixed(otherRound)}`;
+Lat/Lon: ${projected.y.toFixed(otherRound)}, ${projected.x.toFixed(otherRound)}`;
 							} else {
 								centerText = `
 Center X: ${labelPoint.x.toFixed(otherRound)}
@@ -5004,11 +5001,11 @@ Center Y: ${labelPoint.y.toFixed(otherRound)}`;
 																		checked={centerCoord}
 																		onChange={() => setCenterCoord(!centerCoord)}
 																		aria-labelledby='center-coord-checkbox-label'
-																		aria-label={`Center point coordinates ${centerCoord ? 'enabled' : 'disabled'}. Display the coordinates of the center point.`}
+																		aria-label={`Coordinates ${centerCoord ? 'enabled' : 'disabled'}. Display the coordinates of the center point.`}
 																		aria-checked={centerCoord}
-																		title='Toggle display of the center point coordinates'
+																		title='Toggle display of the center coordinates'
 																	/>
-																	Center Point
+																	Coordinates
 																</Label>
 															) : (
 																<></>
