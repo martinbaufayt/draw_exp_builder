@@ -156,6 +156,7 @@ interface States {
 		parentTitle?: string;
 	}>;
 	selectedCopyLayerId: string | null;
+	sketchViewModelReady: boolean;
 	// Drawing tooltip (live feedback during sketch)
 	drawingTooltipVisible: boolean;
 	drawingTooltipX: number;
@@ -1378,6 +1379,7 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 			showCopyLayerDropdown: false,
 			copyableLayers: [],
 			selectedCopyLayerId: null,
+			sketchViewModelReady: false,
 			// Drawing tooltip
 			drawingTooltipVisible: false,
 			drawingTooltipX: 0,
@@ -2683,7 +2685,7 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 				}
 				this.sketchViewModel = null;
 			}
-			this.setState({ currentJimuMapView: null });
+			this.setState({ currentJimuMapView: null, sketchViewModelReady: false });
 			return;
 		}
 
@@ -2807,7 +2809,7 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 				this.sketchViewModel.on('update', this.svmGraUpdate);
 				this.sketchViewModel.on('cursor-update', this.svmCursorUpdate);
 
-				//console.log('✅ SketchViewModel fully initialized and ready');
+				this.setState({ sketchViewModelReady: true });
 			} catch (error) {
 				console.error('Error creating SketchViewModel:', error);
 				return;
@@ -5390,6 +5392,8 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 					className="drawing-tools-section mb-3"
 					role="region"
 					aria-label="Drawing tools"
+					title={!this.state.sketchViewModelReady ? 'Waiting for map to load…' : undefined}
+					style={!this.state.sketchViewModelReady ? { pointerEvents: 'none', opacity: 0.45 } : undefined}
 				>
 					<div className="d-flex justify-content-center">
 						<div
