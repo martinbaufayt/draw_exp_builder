@@ -42,6 +42,10 @@ import Extent from 'esri/geometry/Extent';
 import Polyline from 'esri/geometry/Polyline';
 import geometryEngine from 'esri/geometry/geometryEngine';
 import DrawingTooltip from './components/DrawingTooltip';
+import ShapeInfoPopup, { ShapeInfoData } from './components/ShapeInfoPopup';
+import coordinateFormatter from 'esri/geometry/coordinateFormatter';
+import projectOperator from 'esri/geometry/operators/projectOperator';
+import SpatialReference from 'esri/geometry/SpatialReference';
 
 const pinIcon = require('./assets/pin.svg');
 const curveIcon = require('./assets/curve.svg');
@@ -162,6 +166,11 @@ interface States {
 	drawingTooltipX: number;
 	drawingTooltipY: number;
 	drawingTooltipText: string;
+	// Shape info popup (click on drawn shape)
+	shapeInfoOpen: boolean;
+	shapeInfoData: ShapeInfoData | null;
+	shapeInfoScreenX: number;
+	shapeInfoScreenY: number;
 }
 interface ScrollIndicatorProps {
 	children: React.ReactNode;
@@ -1385,6 +1394,11 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 			drawingTooltipX: 0,
 			drawingTooltipY: 0,
 			drawingTooltipText: '',
+			// Shape info popup
+			shapeInfoOpen: false,
+			shapeInfoData: null,
+			shapeInfoScreenX: 0,
+			shapeInfoScreenY: 0,
 		};
 		this.creationMode = this.props.config.creationMode || DrawMode.SINGLE;
 	}
@@ -1395,6 +1409,9 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 
 	componentDidMount() {
 		this.setState({ widgetInit: true });
+		// Pre-load the WASM module for coordinateFormatter (DMS, DDM, MGRS support)
+		coordinateFormatter.load().catch(() => { /* non-blocking */ });
+
 		this.drawLayer = new GraphicsLayer({
 			id: 'DrawGL',
 			listMode: this.props.config.listMode ? 'show' : 'hide',
@@ -3050,6 +3067,9 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 						const idx = uid && this._drawingMap?.has(uid) ? this._drawingMap.get(uid) : -1;
 						this.handleDrawingSelect(clickedGraphic, idx);
 
+						// Open shape info popup
+						this.openShapeInfoPopup(clickedGraphic as ExtendedGraphic, event.x, event.y);
+
 						// Sync list UI if index is known
 						if (uid && this._drawingMap?.has(uid)) {
 							const index = this._drawingMap.get(uid);
@@ -3062,7 +3082,8 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 							this.setState({ selectedGraphicIndex: index, selectedGraphics: new Set([index]) });
 						}
 					} else {
-						// Click away - clear all selections
+						// Click away - clear all selections and close info popup
+						this.setState({ shapeInfoOpen: false });
 						//console.log('🔘 WIDGET: No selectable graphics hit - clearing selections');
 
 						// 🔧 CRITICAL FIX: Save measurement labels BEFORE cancel to prevent them from being removed
@@ -3901,6 +3922,82 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 		//console.log(`${type}: ${message}`);
 		alert(message);
 	}
+
+	openShapeInfoPopup = async (graphic: ExtendedGraphic, screenX: number, screenY: number) => {
+		try {
+			const geometry = graphic.geometry;
+			if (!geometry) return;
+
+			const shapeType: string = graphic.attributes?.drawMode ?? geometry.type ?? 'unknown';
+
+			// Compute center point
+			let centerPt: __esri.Point | null = null;
+			if (geometry.type === 'point') {
+				centerPt = geometry as __esri.Point;
+			} else if (geometry.type === 'polygon') {
+				const poly = geometry as __esri.Polygon;
+				centerPt = (poly as any).centroid ?? poly.extent?.center ?? null;
+			} else if (geometry.type === 'polyline') {
+				centerPt = (geometry as __esri.Polyline).extent?.center ?? null;
+			} else if ((geometry as any).extent) {
+				centerPt = (geometry as any).extent.center;
+			}
+
+			if (!centerPt) return;
+
+			// Project to WGS84
+			if (!projectOperator.isLoaded()) await projectOperator.load();
+			const [wgs84Pt] = projectOperator.executeMany([centerPt], SpatialReference.WGS84) as __esri.Point[];
+			if (!wgs84Pt) return;
+
+			// Format coordinates — coordinateFormatter.load() was called in componentDidMount
+			if (!coordinateFormatter.isLoaded()) await coordinateFormatter.load();
+
+			const dd = coordinateFormatter.toLatitudeLongitude(wgs84Pt, 'dd', 6) ?? `${wgs84Pt.y.toFixed(6)}, ${wgs84Pt.x.toFixed(6)}`;
+			const dms = coordinateFormatter.toLatitudeLongitude(wgs84Pt, 'dms', 1) ?? dd;
+			const ddm = coordinateFormatter.toLatitudeLongitude(wgs84Pt, 'ddm', 4) ?? dd;
+			const mgrs = coordinateFormatter.toMgrs(wgs84Pt, 'automatic', 5) ?? 'N/A';
+
+			const data: ShapeInfoData = { shapeType, dd, dms, ddm, mgrs };
+
+			// Compute measurements
+			if (geometry.type === 'polygon') {
+				const geometryEngineAsync = (await import('esri/geometry/geometryEngineAsync')).default;
+				const areaSqM = await geometryEngineAsync.geodesicArea(geometry as __esri.Polygon, 'square-meters');
+				const perimeterM = await geometryEngineAsync.geodesicLength(geometry as __esri.Polygon, 'meters');
+				data.areaSqM = Math.abs(areaSqM);
+				data.perimeterM = Math.abs(perimeterM);
+
+				// For circles, also compute radius (circle = 61-point polygon ring)
+				if (shapeType === 'circle') {
+					const ext = geometry.extent;
+					if (ext) {
+						const centerX = (ext.xmin + ext.xmax) / 2;
+						const centerY = (ext.ymin + ext.ymax) / 2;
+						const radiusLine = new Polyline({
+							paths: [[[centerX, centerY], [ext.xmax, centerY]]],
+							spatialReference: geometry.spatialReference,
+						});
+						const radiusM = await geometryEngineAsync.geodesicLength(radiusLine, 'meters');
+						data.radiusM = Math.abs(radiusM);
+						data.radiusNM = Math.abs(radiusM) * 0.000539957;
+						// For circles prefer radius display over area/perimeter
+						delete data.areaSqM;
+						delete data.perimeterM;
+					}
+				}
+			}
+
+			this.setState({
+				shapeInfoOpen: true,
+				shapeInfoData: data,
+				shapeInfoScreenX: screenX,
+				shapeInfoScreenY: screenY,
+			});
+		} catch (err) {
+			console.warn('openShapeInfoPopup error:', err);
+		}
+	};
 
 	svmCursorUpdate = (evt) => {
 		if (!evt || !evt.graphic || !evt.graphic.geometry) {
@@ -4907,6 +5004,11 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 	}
 
 	setDrawToolBtnState = (toolBtn: 'point' | 'polyline' | 'freepolyline' | 'extent' | 'polygon' | 'circle' | 'freepolygon' | 'text' | '') => {
+		// Close shape info popup whenever a draw tool is activated
+		if (toolBtn !== '' && this.state.shapeInfoOpen) {
+			this.setState({ shapeInfoOpen: false });
+		}
+
 		// ENHANCED: Clean measurement editing coordination before drawing tool activation
 		if (toolBtn !== '' && this.measureRef?.current?.isEditingMeasurements?.()) {
 			//console.log('Drawing tool activating - cleaning up measurement editing');
@@ -6728,6 +6830,15 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 					x={this.state.drawingTooltipX}
 					y={this.state.drawingTooltipY}
 					text={this.state.drawingTooltipText}
+				/>
+
+				{/* Shape info popup — shown on click on a drawn shape */}
+				<ShapeInfoPopup
+					open={this.state.shapeInfoOpen}
+					data={this.state.shapeInfoData}
+					screenX={this.state.shapeInfoScreenX}
+					screenY={this.state.shapeInfoScreenY}
+					onClose={() => this.setState({ shapeInfoOpen: false })}
 				/>
 
 				{/* Attach to Map View */}
