@@ -39,6 +39,9 @@ import SimpleLineSymbol from 'esri/symbols/SimpleLineSymbol';
 import SimpleFillSymbol from 'esri/symbols/SimpleFillSymbol';
 import SimpleMarkerSymbol from 'esri/symbols/SimpleMarkerSymbol';
 import Extent from 'esri/geometry/Extent';
+import Polyline from 'esri/geometry/Polyline';
+import geometryEngine from 'esri/geometry/geometryEngine';
+import DrawingTooltip from './components/DrawingTooltip';
 
 const pinIcon = require('./assets/pin.svg');
 const curveIcon = require('./assets/curve.svg');
@@ -153,6 +156,11 @@ interface States {
 		parentTitle?: string;
 	}>;
 	selectedCopyLayerId: string | null;
+	// Drawing tooltip (live feedback during sketch)
+	drawingTooltipVisible: boolean;
+	drawingTooltipX: number;
+	drawingTooltipY: number;
+	drawingTooltipText: string;
 }
 interface ScrollIndicatorProps {
 	children: React.ReactNode;
@@ -297,6 +305,7 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 	measureRef: React.RefObject<any> = React.createRef();
 
 	private _selectionEpoch = 0;
+	private _tooltipRafId: number | null = null;
 	private _measurementWasEnabled: boolean = false;
 	private _measurementUpdateTimeout: any = null;
 	private _activeMeasurementUpdateTimeout: any = null;
@@ -1368,7 +1377,12 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 			// New: Layer-first copy approach
 			showCopyLayerDropdown: false,
 			copyableLayers: [],
-			selectedCopyLayerId: null
+			selectedCopyLayerId: null,
+			// Drawing tooltip
+			drawingTooltipVisible: false,
+			drawingTooltipX: 0,
+			drawingTooltipY: 0,
+			drawingTooltipText: '',
 		};
 		this.creationMode = this.props.config.creationMode || DrawMode.SINGLE;
 	}
@@ -2791,6 +2805,7 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 
 				this.sketchViewModel.on('create', this.svmGraCreate);
 				this.sketchViewModel.on('update', this.svmGraUpdate);
+				this.sketchViewModel.on('cursor-update', this.svmCursorUpdate);
 
 				//console.log('✅ SketchViewModel fully initialized and ready');
 			} catch (error) {
@@ -3885,6 +3900,122 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 		alert(message);
 	}
 
+	svmCursorUpdate = (evt) => {
+		if (!evt || !evt.graphic || !evt.graphic.geometry) {
+			this.setState({ drawingTooltipVisible: false });
+			return;
+		}
+
+		// Throttle updates to one per animation frame
+		if (this._tooltipRafId !== null) {
+			cancelAnimationFrame(this._tooltipRafId);
+		}
+		this._tooltipRafId = requestAnimationFrame(() => {
+			this._tooltipRafId = null;
+			this._updateDrawingTooltip(evt.graphic.geometry);
+		});
+	};
+
+	_updateDrawingTooltip = (geometry: __esri.Geometry) => {
+		const view = this.sketchViewModel?.view;
+		const tool = this.state.currentTool;
+
+		if (!view || !geometry) {
+			this.setState({ drawingTooltipVisible: false });
+			return;
+		}
+
+		const formatDist = (m: number) =>
+			m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+
+		try {
+			if (tool === 'circle' && geometry.type === 'polygon') {
+				const poly = geometry as __esri.Polygon;
+				const ext = poly.extent;
+				if (!ext) return;
+
+				const centerX = (ext.xmin + ext.xmax) / 2;
+				const centerY = (ext.ymin + ext.ymax) / 2;
+				const edgeX = ext.xmax;
+				const edgeY = centerY;
+
+				const radiusLine = new Polyline({
+					paths: [[[centerX, centerY], [edgeX, edgeY]]],
+					spatialReference: poly.spatialReference,
+				});
+
+				const radiusM = geometryEngine.geodesicLength(radiusLine, 'meters');
+				const radiusNM = radiusM * 0.000539957;
+				const text = radiusNM < 0.01
+					? formatDist(radiusM)
+					: `R: ${radiusNM.toFixed(2)} NM`;
+
+				const screenPt = view.toScreen({ x: edgeX, y: edgeY, spatialReference: poly.spatialReference } as any);
+				this.setState({
+					drawingTooltipVisible: true,
+					drawingTooltipX: screenPt.x,
+					drawingTooltipY: screenPt.y,
+					drawingTooltipText: text,
+				});
+
+			} else if (tool === 'extent' && geometry.type === 'polygon') {
+				const poly = geometry as __esri.Polygon;
+				const ext = poly.extent;
+				if (!ext) return;
+
+				const wLine = new Polyline({
+					paths: [[[ext.xmin, ext.ymin], [ext.xmax, ext.ymin]]],
+					spatialReference: poly.spatialReference,
+				});
+				const hLine = new Polyline({
+					paths: [[[ext.xmin, ext.ymin], [ext.xmin, ext.ymax]]],
+					spatialReference: poly.spatialReference,
+				});
+
+				const wM = geometryEngine.geodesicLength(wLine, 'meters');
+				const hM = geometryEngine.geodesicLength(hLine, 'meters');
+
+				const screenPt = view.toScreen({ x: ext.xmax, y: ext.ymax, spatialReference: poly.spatialReference } as any);
+				this.setState({
+					drawingTooltipVisible: true,
+					drawingTooltipX: screenPt.x,
+					drawingTooltipY: screenPt.y,
+					drawingTooltipText: `W: ${formatDist(wM)}  H: ${formatDist(hM)}`,
+				});
+
+			} else if ((tool === 'polygon' || tool === 'freepolygon') && geometry.type === 'polygon') {
+				const poly = geometry as __esri.Polygon;
+				const ring = poly.rings?.[0];
+				if (!ring || ring.length < 2) {
+					this.setState({ drawingTooltipVisible: false });
+					return;
+				}
+
+				const lastPt = ring[ring.length - 1];
+				const prevPt = ring[ring.length - 2];
+
+				const segLine = new Polyline({
+					paths: [[[prevPt[0], prevPt[1]], [lastPt[0], lastPt[1]]]],
+					spatialReference: poly.spatialReference,
+				});
+
+				const segM = geometryEngine.geodesicLength(segLine, 'meters');
+				const screenPt = view.toScreen({ x: lastPt[0], y: lastPt[1], spatialReference: poly.spatialReference } as any);
+				this.setState({
+					drawingTooltipVisible: true,
+					drawingTooltipX: screenPt.x,
+					drawingTooltipY: screenPt.y,
+					drawingTooltipText: formatDist(segM),
+				});
+
+			} else {
+				this.setState({ drawingTooltipVisible: false });
+			}
+		} catch {
+			this.setState({ drawingTooltipVisible: false });
+		}
+	};
+
 	svmGraCreate = async (evt) => {
 		try {
 			// Basic validation
@@ -3905,8 +4036,17 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 				return; // Exit early for active state
 			}
 
+			// ---- CANCEL STATE: Clear tooltip ----
+			if (evt.state === 'cancel') {
+				this.setState({ drawingTooltipVisible: false });
+				return;
+			}
+
 			// ---- COMPLETE STATE: Finalize the drawing ----
 			if (evt.state !== 'complete') return;
+
+			// Clear tooltip now that drawing is done
+			this.setState({ drawingTooltipVisible: false });
 
 			// ---- 1) Initialize base attributes immediately (before any async) ----
 			g.attributes = g.attributes || {};
@@ -6578,6 +6718,14 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 				role="application"
 				aria-label="Drawing and annotation tools widget"
 			>
+				{/* Live drawing tooltip — rendered outside widget panel via position:fixed */}
+				<DrawingTooltip
+					visible={this.state.drawingTooltipVisible}
+					x={this.state.drawingTooltipX}
+					y={this.state.drawingTooltipY}
+					text={this.state.drawingTooltipText}
+				/>
+
 				{/* Attach to Map View */}
 				{this.props.useMapWidgetIds && this.props.useMapWidgetIds.length === 1 && (
 					<JimuMapViewComponent
