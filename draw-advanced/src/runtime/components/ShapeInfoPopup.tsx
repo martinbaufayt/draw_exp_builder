@@ -165,6 +165,8 @@ const ShapeInfoPopup: React.FC<ShapeInfoPopupProps> = ({ open, data, screenX, sc
     wordBreak: 'break-all',
   };
 
+  const showCoordinates = ['circle', 'extent', 'point'].includes(data.shapeType);
+
   const hasMeasures =
     data.areaSqM !== undefined ||
     data.perimeterM !== undefined ||
@@ -178,26 +180,28 @@ const ShapeInfoPopup: React.FC<ShapeInfoPopupProps> = ({ open, data, screenX, sc
         <button style={closeBtnStyle} onClick={onClose} aria-label="Close shape info">×</button>
       </div>
 
-      {/* Coordinates */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Center coordinates</div>
-        <div style={rowStyle}>
-          <span style={keyStyle}>DD</span>
-          <span style={valStyle}>{data.dd}</span>
+      {/* Coordinates — only for circle, rectangle, point */}
+      {showCoordinates && (
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Center coordinates</div>
+          <div style={rowStyle}>
+            <span style={keyStyle}>DD</span>
+            <span style={valStyle}>{data.dd}</span>
+          </div>
+          <div style={rowStyle}>
+            <span style={keyStyle}>DMS</span>
+            <span style={valStyle}>{data.dms}</span>
+          </div>
+          <div style={rowStyle}>
+            <span style={keyStyle}>DDM</span>
+            <span style={valStyle}>{data.ddm}</span>
+          </div>
+          <div style={rowStyle}>
+            <span style={keyStyle}>MGRS</span>
+            <span style={valStyle}>{data.mgrs}</span>
+          </div>
         </div>
-        <div style={rowStyle}>
-          <span style={keyStyle}>DMS</span>
-          <span style={valStyle}>{data.dms}</span>
-        </div>
-        <div style={rowStyle}>
-          <span style={keyStyle}>DDM</span>
-          <span style={valStyle}>{data.ddm}</span>
-        </div>
-        <div style={rowStyle}>
-          <span style={keyStyle}>MGRS</span>
-          <span style={valStyle}>{data.mgrs}</span>
-        </div>
-      </div>
+      )}
 
       {/* Measures */}
       {hasMeasures && (

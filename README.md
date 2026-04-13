@@ -24,31 +24,31 @@ A feature-rich drawing widget for [ArcGIS Experience Builder](https://developers
 | Circle | Radius-based circle |
 | Text | Annotation with full font control |
 
-### Measurements
+### Live drawing tooltip
 
-- Area, perimeter, length, and radius with configurable units (km, mi, m, NM, ft, yd; km², mi², ac, ha, m², ft², yd²)
-- Per-segment length labels on polylines
-- Draggable measurement labels
-- **Live tooltip during drawing** *(branch: `feature/live-drawing-tooltip`)*
-  - Circle → radius in nautical miles, updated in real time as you drag
-  - Rectangle → width and height in metres/km
-  - Polygon → current segment length in metres/km
-  - Disappears automatically when the shape is completed
+A real-time overlay near the cursor appears while drawing and disappears automatically when the shape is completed:
+
+| Tool | Tooltip content |
+|---|---|
+| Circle | Radius in nautical miles (NM), or metres for very small radii |
+| Rectangle | Width and height in metres / km |
+| Polygon | Current segment length in metres / km |
+| Polyline / Freehand polyline | Current segment length in metres / km |
+
+### Shape info popup
+
+Click any drawn shape after completion to open an information panel:
+
+- **Circle, Rectangle, Point** — center coordinates in four formats: Decimal Degrees (DD), Degrees Minutes Seconds (DMS), Degrees Decimal Minutes (DDM), and MGRS
+- **Polygon / Freehand Polygon** — area (auto-scaled to m², ha, or km²) and perimeter
+- **Circle** — radius in nautical miles
+- **Rectangle** — area and perimeter
+
+Closes on outside click, `Escape`, or when a new drawing tool is activated.
 
 ### Coordinate display
 
-- Center coordinates shown on measurement labels for circles and rectangles
-- WGS84 `Lon(X)/Lat(Y)` with native-CRS fallback
-
-### Shape info popup *(branch: `feature/shape-info-popup`)*
-
-Click any drawn shape after it is completed to open an information panel showing:
-
-- **Center coordinates** in four formats: Decimal Degrees (DD), Degrees Minutes Seconds (DMS), Degrees Decimal Minutes (DDM), and MGRS
-- **Area** and **perimeter** for polygons and rectangles (auto-scaled to m², ha, or km²)
-- **Radius** in nautical miles for circles
-
-Closes on outside click, `Escape`, or when a new drawing tool is activated.
+Center coordinates (WGS84 Lon/Lat) shown on measurement labels for circles and rectangles, with native-CRS fallback.
 
 ### Symbology
 
@@ -68,9 +68,7 @@ Closes on outside click, `Escape`, or when a new drawing tool is activated.
 ### Other
 
 - **Buffer zones** — configurable distance and unit around any geometry
-- **Snapping** — feature snapping per layer with grid controls
 - **Storage scope** — persist drawings per-app or globally across all apps (configurable in ExB settings)
-- **Section 508 / WCAG 2.1 AA** compliant measurement overlay
 
 ---
 
@@ -116,18 +114,16 @@ draw-advanced/
     │   ├── lib/style.ts        # CSS-in-JS (jimu-core)
     │   ├── translations/       # i18n strings
     │   └── components/
-    │       ├── measure.tsx          # Live measurement overlay
     │       ├── DrawingTooltip.tsx   # Cursor tooltip during sketch
     │       ├── ShapeInfoPopup.tsx   # Post-draw info popup
     │       ├── BufferControls.tsx   # Buffer zone UI
     │       ├── MyDrawingsPanel.tsx  # Drawings list + export
-    │       ├── SnappingControls.tsx # Snapping + grid controls
     │       └── TextStyleEditor.tsx  # Text symbol editor
     └── setting/
         └── setting.tsx         # ExB configuration panel
 ```
 
-Key ArcGIS JS SDK APIs: `SketchViewModel`, `GraphicsLayer`, `geometryEngine` / `geometryEngineAsync`, `coordinateFormatter`, `projectOperator`.
+Key ArcGIS JS SDK APIs: `SketchViewModel`, `GraphicsLayer`, `geometryEngine`, `coordinateFormatter`, `projectOperator`.
 
 ---
 
@@ -135,9 +131,9 @@ Key ArcGIS JS SDK APIs: `SketchViewModel`, `GraphicsLayer`, `geometryEngine` / `
 
 | Branch | Description |
 |---|---|
-| `main` | Baseline widget with all core drawing and measurement features |
+| `main` | Baseline widget with all core drawing features |
 | `add_polygons_coordinates` | Adds center coordinates display (WGS84 Lon/Lat) on measurement labels |
-| `feature/live-drawing-tooltip` | Adds real-time tooltip showing radius/segment length while drawing |
+| `feature/live-drawing-tooltip` | Adds real-time cursor tooltip (radius, segment length) during drawing |
 | `feature/shape-info-popup` | Adds click popup with DD/DMS/DDM/MGRS coordinates and measurements |
 
 ---
@@ -149,3 +145,4 @@ Key ArcGIS JS SDK APIs: `SketchViewModel`, `GraphicsLayer`, `geometryEngine` / `
 - `IMConfig` is a `seamless-immutable` object — use `.set(key, value)` to update it; never mutate directly.
 - `widget.tsx` uses `/** @jsx jsx */` + `jsx` from `jimu-core` for ExB theming.
 - User-facing strings live in `src/runtime/translations/default.ts`; reference them via `this.nls('key')`.
+- The `cursor-update` event on `SketchViewModel` exposes `evt.graphics[]` (array), unlike `create` which exposes `evt.graphic` (singular).

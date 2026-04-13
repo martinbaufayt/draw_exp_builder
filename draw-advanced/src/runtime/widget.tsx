@@ -30,9 +30,9 @@ import hAlignCenter from 'jimu-icons/svg/outlined/editor/text-center.svg';
 import hAlignRight from 'jimu-icons/svg/outlined/editor/text-right.svg';
 import esriColor from 'esri/Color';
 import './widget.css';
-import Measure from './components/measure';
+// Measure component removed — measurements feature disabled
 import { MyDrawingsPanel } from './components/MyDrawingsPanel';
-import { SnappingControls } from './components/SnappingControls';
+// SnappingControls removed — snapping feature disabled
 import { BufferControls } from './components/BufferControls';
 import { Tabs, Tab } from 'jimu-ui';
 import SimpleLineSymbol from 'esri/symbols/SimpleLineSymbol';
@@ -4000,7 +4000,9 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 	};
 
 	svmCursorUpdate = (evt) => {
-		if (!evt || !evt.graphic || !evt.graphic.geometry) {
+		// cursor-update exposes evt.graphics (array), not evt.graphic
+		const graphic = evt?.graphics?.[0];
+		if (!graphic?.geometry) {
 			this.setState({ drawingTooltipVisible: false });
 			return;
 		}
@@ -4009,9 +4011,10 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 		if (this._tooltipRafId !== null) {
 			cancelAnimationFrame(this._tooltipRafId);
 		}
+		const geometry = graphic.geometry;
 		this._tooltipRafId = requestAnimationFrame(() => {
 			this._tooltipRafId = null;
-			this._updateDrawingTooltip(evt.graphic.geometry);
+			this._updateDrawingTooltip(geometry);
 		});
 	};
 
@@ -4057,24 +4060,36 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 					drawingTooltipText: text,
 				});
 
-			} else if (tool === 'extent' && geometry.type === 'polygon') {
-				const poly = geometry as __esri.Polygon;
-				const ext = poly.extent;
-				if (!ext) return;
+			} else if (tool === 'extent') {
+				// During drawing, extent tool may return geometry.type === 'extent' or 'polygon'
+				let ext: __esri.Extent | null = null;
+				let sr: __esri.SpatialReference | null = null;
+
+				if (geometry.type === 'extent') {
+					const extGeom = geometry as __esri.Extent;
+					ext = extGeom;
+					sr = extGeom.spatialReference;
+				} else if (geometry.type === 'polygon') {
+					const poly = geometry as __esri.Polygon;
+					ext = poly.extent;
+					sr = poly.spatialReference;
+				}
+
+				if (!ext || !sr) { this.setState({ drawingTooltipVisible: false }); return; }
 
 				const wLine = new Polyline({
 					paths: [[[ext.xmin, ext.ymin], [ext.xmax, ext.ymin]]],
-					spatialReference: poly.spatialReference,
+					spatialReference: sr,
 				});
 				const hLine = new Polyline({
 					paths: [[[ext.xmin, ext.ymin], [ext.xmin, ext.ymax]]],
-					spatialReference: poly.spatialReference,
+					spatialReference: sr,
 				});
 
 				const wM = geometryEngine.geodesicLength(wLine, 'meters');
 				const hM = geometryEngine.geodesicLength(hLine, 'meters');
 
-				const screenPt = view.toScreen({ x: ext.xmax, y: ext.ymax, spatialReference: poly.spatialReference } as any);
+				const screenPt = view.toScreen({ x: ext.xmax, y: ext.ymax, spatialReference: sr } as any);
 				this.setState({
 					drawingTooltipVisible: true,
 					drawingTooltipX: screenPt.x,
@@ -4082,24 +4097,60 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 					drawingTooltipText: `W: ${formatDist(wM)}  H: ${formatDist(hM)}`,
 				});
 
-			} else if ((tool === 'polygon' || tool === 'freepolygon') && geometry.type === 'polygon') {
-				const poly = geometry as __esri.Polygon;
-				const ring = poly.rings?.[0];
-				if (!ring || ring.length < 2) {
-					this.setState({ drawingTooltipVisible: false });
-					return;
+			} else if (tool === 'polygon') {
+				// During drawing, polygon tool returns a polyline (partial path) until the shape is closed
+				let pts: number[][] | null = null;
+				let sr: __esri.SpatialReference | null = null;
+
+				if (geometry.type === 'polyline') {
+					const pline = geometry as __esri.Polyline;
+					pts = pline.paths?.[0] ?? null;
+					sr = pline.spatialReference;
+				} else if (geometry.type === 'polygon') {
+					const poly = geometry as __esri.Polygon;
+					pts = poly.rings?.[0] ?? null;
+					sr = poly.spatialReference;
 				}
 
-				const lastPt = ring[ring.length - 1];
-				const prevPt = ring[ring.length - 2];
+				if (!pts || pts.length < 2 || !sr) { this.setState({ drawingTooltipVisible: false }); return; }
+
+				const lastPt = pts[pts.length - 1];
+				const prevPt = pts[pts.length - 2];
 
 				const segLine = new Polyline({
 					paths: [[[prevPt[0], prevPt[1]], [lastPt[0], lastPt[1]]]],
-					spatialReference: poly.spatialReference,
+					spatialReference: sr,
 				});
 
 				const segM = geometryEngine.geodesicLength(segLine, 'meters');
-				const screenPt = view.toScreen({ x: lastPt[0], y: lastPt[1], spatialReference: poly.spatialReference } as any);
+				const screenPt = view.toScreen({ x: lastPt[0], y: lastPt[1], spatialReference: sr } as any);
+				this.setState({
+					drawingTooltipVisible: true,
+					drawingTooltipX: screenPt.x,
+					drawingTooltipY: screenPt.y,
+					drawingTooltipText: formatDist(segM),
+				});
+
+			} else if (tool === 'polyline' || tool === 'freepolyline') {
+				// Polyline tool: geometry is always a polyline (partial path)
+				if (geometry.type !== 'polyline') { this.setState({ drawingTooltipVisible: false }); return; }
+
+				const pline = geometry as __esri.Polyline;
+				const pts = pline.paths?.[0];
+				const sr = pline.spatialReference;
+
+				if (!pts || pts.length < 2 || !sr) { this.setState({ drawingTooltipVisible: false }); return; }
+
+				const lastPt = pts[pts.length - 1];
+				const prevPt = pts[pts.length - 2];
+
+				const segLine = new Polyline({
+					paths: [[[prevPt[0], prevPt[1]], [lastPt[0], lastPt[1]]]],
+					spatialReference: sr,
+				});
+
+				const segM = geometryEngine.geodesicLength(segLine, 'meters');
+				const screenPt = view.toScreen({ x: lastPt[0], y: lastPt[1], spatialReference: sr } as any);
 				this.setState({
 					drawingTooltipVisible: true,
 					drawingTooltipX: screenPt.x,
@@ -6137,40 +6188,13 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 				{/* Text Popper - This stays outside the scroll area for proper positioning */}
 				{textPreviewisOpen && this.renderTextPopper()}
 
-				{/* === MAIN CHECKBOX STACK: 20px between Measure / Tooltips / Snapping / Buffer === */}
-				<div
-					className="main-checkbox-stack"
-					role="region"
-					aria-label="Drawing options and settings"
-				>
-					{/* Measurements */}
-					<Measure
-						ref={this.measureRef}
-						nls={this.nls}
-						config={config}
-						drawLayer={this.drawLayer}
-						currentTextSymbol={this.state.currentTextSymbol}
+				{/* Buffer Controls - Hidden for text tool */}
+				{!textBtnActive && (
+					<BufferControls
 						sketchViewModel={this.sketchViewModel}
-						currentTool={this.state.currentTool}
-						showTextPreview={this.state.showTextPreview}
-						currentSymbol={this.state.currentSymbol}
-						isDrawingActive={isDrawingActive}
-					/>
-
-					{/* Enable Tooltips */}
-					<SnappingControls
 						jimuMapView={this.state.currentJimuMapView}
-						sketchViewModel={this.sketchViewModel}
 					/>
-
-					{/* Buffer Controls - Hidden for text tool */}
-					{!textBtnActive && (
-						<BufferControls
-							sketchViewModel={this.sketchViewModel}
-							jimuMapView={this.state.currentJimuMapView}
-						/>
-					)}
-				</div>
+				)}
 				<div
 					className='d-flex flex-column justify-content-between'
 					style={{ height: '150px' }}
