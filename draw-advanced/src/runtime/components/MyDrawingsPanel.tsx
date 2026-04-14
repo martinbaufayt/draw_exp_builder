@@ -3908,6 +3908,8 @@ export class MyDrawingsPanel extends React.PureComponent<MyDrawingsPanelProps, M
      */
     private safeUpdateMeasurements = (graphic: ExtendedGraphic, retryCount = 0, maxRetries = 10) => {
         if (!graphic) return;
+        // Measure component is disabled — skip silently
+        if (!this.measureRef?.current) return;
 
         const attemptUpdate = () => {
             if (this.measureRef?.current?.updateMeasurementsForGraphic) {

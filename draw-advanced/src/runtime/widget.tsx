@@ -4002,6 +4002,7 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 	svmCursorUpdate = (evt) => {
 		// cursor-update exposes evt.graphics (array), not evt.graphic
 		const graphic = evt?.graphics?.[0];
+		console.log('[DrawTooltip] cursor-update fired', { hasGraphic: !!graphic, geometryType: graphic?.geometry?.type });
 		if (!graphic?.geometry) {
 			this.setState({ drawingTooltipVisible: false });
 			return;
@@ -4173,15 +4174,17 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 
 			const g = evt.graphic;
 
-			// ---- ACTIVE STATE: Show live measurements during drawing ----
+			// ---- ACTIVE STATE: Show live tooltip during drawing ----
 			if (evt.state === 'active') {
-				// Update live measurements if the measurement system is enabled
-				if (this.measureRef?.current) {
-					try {
-						await this.measureRef.current.updateMeasurementsForGraphic(g);
-					} catch (error) {
-						console.warn('Error updating live measurements:', error);
-					}
+				console.log('[DrawTooltip] create active fired', { geometryType: g?.geometry?.type, tool: this.state.currentTool });
+				if (g?.geometry) {
+					// Throttle via rAF — same path as cursor-update fallback
+					if (this._tooltipRafId !== null) cancelAnimationFrame(this._tooltipRafId);
+					const geom = g.geometry;
+					this._tooltipRafId = requestAnimationFrame(() => {
+						this._tooltipRafId = null;
+						this._updateDrawingTooltip(geom);
+					});
 				}
 				return; // Exit early for active state
 			}
