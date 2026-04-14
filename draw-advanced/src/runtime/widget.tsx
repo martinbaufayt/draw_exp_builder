@@ -4103,12 +4103,26 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 				});
 
 			} else if (tool === 'polygon') {
-				// Same logic as polyline — geometry during drawing is a polyline (partial path)
-				if (geometry.type !== 'polyline') { this.setState({ drawingTooltipVisible: false }); return; }
+				// Geometry during drawing can be polyline (partial) or polygon depending on API version
+				let pts: number[][] | null = null;
+				let sr: __esri.SpatialReference | null = null;
 
-				const pline = geometry as __esri.Polyline;
-				const pts = pline.paths?.[0];
-				const sr = pline.spatialReference;
+				if (geometry.type === 'polyline') {
+					const pline = geometry as __esri.Polyline;
+					pts = pline.paths?.[0] ?? null;
+					sr = pline.spatialReference;
+				} else if (geometry.type === 'polygon') {
+					const poly = geometry as __esri.Polygon;
+					// Ring may be auto-closed [V1,...,Vn,CURSOR,V1] — strip closing point
+					const ring = poly.rings?.[0] ?? null;
+					if (ring && ring.length >= 2) {
+						const first = ring[0];
+						const last = ring[ring.length - 1];
+						const isClosed = first[0] === last[0] && first[1] === last[1];
+						pts = isClosed ? ring.slice(0, ring.length - 1) : ring;
+					}
+					sr = poly.spatialReference;
+				}
 
 				if (!pts || pts.length < 2 || !sr) { this.setState({ drawingTooltipVisible: false }); return; }
 
