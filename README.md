@@ -33,7 +33,7 @@ A real-time overlay near the cursor appears while drawing and disappears automat
 | Circle | Radius in nautical miles (NM), or metres for very small radii |
 | Rectangle | Width and height in metres / km |
 | Polygon | Current segment length in metres / km |
-| Polyline / Freehand polyline | Current segment length in metres / km |
+| Polyline | Current segment length in metres / km |
 
 ### Shape info popup
 
@@ -43,6 +43,7 @@ Click any drawn shape after completion to open an information panel:
 - **Polygon / Freehand Polygon** — area (auto-scaled to m², ha, or km²) and perimeter
 - **Circle** — radius in nautical miles
 - **Rectangle** — area and perimeter
+- **Polyline / Freehand Polyline** — total length (auto-scaled to m / km)
 
 Closes on outside click, `Escape`, or when a new drawing tool is activated.
 

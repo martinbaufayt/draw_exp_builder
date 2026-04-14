@@ -3961,7 +3961,11 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 			const data: ShapeInfoData = { shapeType, dd, dms, ddm, mgrs };
 
 			// Compute measurements
-			if (geometry.type === 'polygon') {
+			if (geometry.type === 'polyline') {
+				const geometryEngineAsync = (await import('esri/geometry/geometryEngineAsync')).default;
+				const lengthM = await geometryEngineAsync.geodesicLength(geometry as __esri.Polyline, 'meters');
+				data.totalLengthM = Math.abs(lengthM);
+			} else if (geometry.type === 'polygon') {
 				const geometryEngineAsync = (await import('esri/geometry/geometryEngineAsync')).default;
 				const areaSqM = await geometryEngineAsync.geodesicArea(geometry as __esri.Polygon, 'square-meters');
 				const perimeterM = await geometryEngineAsync.geodesicLength(geometry as __esri.Polygon, 'meters');
@@ -4099,19 +4103,12 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 				});
 
 			} else if (tool === 'polygon') {
-				// During drawing, polygon tool returns a polyline (partial path) until the shape is closed
-				let pts: number[][] | null = null;
-				let sr: __esri.SpatialReference | null = null;
+				// Same logic as polyline — geometry during drawing is a polyline (partial path)
+				if (geometry.type !== 'polyline') { this.setState({ drawingTooltipVisible: false }); return; }
 
-				if (geometry.type === 'polyline') {
-					const pline = geometry as __esri.Polyline;
-					pts = pline.paths?.[0] ?? null;
-					sr = pline.spatialReference;
-				} else if (geometry.type === 'polygon') {
-					const poly = geometry as __esri.Polygon;
-					pts = poly.rings?.[0] ?? null;
-					sr = poly.spatialReference;
-				}
+				const pline = geometry as __esri.Polyline;
+				const pts = pline.paths?.[0];
+				const sr = pline.spatialReference;
 
 				if (!pts || pts.length < 2 || !sr) { this.setState({ drawingTooltipVisible: false }); return; }
 
@@ -4132,7 +4129,7 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 					drawingTooltipText: formatDist(segM),
 				});
 
-			} else if (tool === 'polyline' || tool === 'freepolyline') {
+			} else if (tool === 'polyline') {
 				// Polyline tool: geometry is always a polyline (partial path)
 				if (geometry.type !== 'polyline') { this.setState({ drawingTooltipVisible: false }); return; }
 

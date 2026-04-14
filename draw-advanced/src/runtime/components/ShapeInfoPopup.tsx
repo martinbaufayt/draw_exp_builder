@@ -12,6 +12,8 @@ export interface ShapeInfoData {
   // Circle
   radiusNM?: number;
   radiusM?: number;
+  // Polyline / freehand polyline
+  totalLengthM?: number;
 }
 
 interface ShapeInfoPopupProps {
@@ -170,7 +172,8 @@ const ShapeInfoPopup: React.FC<ShapeInfoPopupProps> = ({ open, data, screenX, sc
   const hasMeasures =
     data.areaSqM !== undefined ||
     data.perimeterM !== undefined ||
-    data.radiusNM !== undefined;
+    data.radiusNM !== undefined ||
+    data.totalLengthM !== undefined;
 
   return (
     <div ref={panelRef} style={panelStyle} role="dialog" aria-label="Shape information">
@@ -227,6 +230,12 @@ const ShapeInfoPopup: React.FC<ShapeInfoPopupProps> = ({ open, data, screenX, sc
                   ? formatDist(data.radiusM ?? 0)
                   : data.radiusNM.toFixed(3) + ' NM'}
               </span>
+            </div>
+          )}
+          {data.totalLengthM !== undefined && (
+            <div style={rowStyle}>
+              <span style={keyStyle}>Length</span>
+              <span style={valStyle}>{formatDist(data.totalLengthM)}</span>
             </div>
           )}
         </div>
