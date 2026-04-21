@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 
 interface DrawingTooltipProps {
   visible: boolean;
@@ -7,10 +8,23 @@ interface DrawingTooltipProps {
   text: string;
 }
 
+function getOverlayRoot(): HTMLElement {
+  let root = document.getElementById('draw-widget-overlay-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'draw-widget-overlay-root';
+    // position:relative creates a stacking context at z-index max,
+    // ensuring children beat any ExB or ArcGIS layers stacking context.
+    root.style.cssText = 'position:relative;z-index:2147483647;pointer-events:none;';
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
 const DrawingTooltip: React.FC<DrawingTooltipProps> = ({ visible, x, y, text }) => {
   if (!visible || !text) return null;
 
-  return (
+  return ReactDOM.createPortal(
     <div
       aria-hidden="true"
       style={{
@@ -25,14 +39,14 @@ const DrawingTooltip: React.FC<DrawingTooltipProps> = ({ visible, x, y, text }) 
         fontFamily: "'Avenir Next LT Pro', Arial, sans-serif",
         fontWeight: 500,
         pointerEvents: 'none',
-        zIndex: 9999,
         whiteSpace: 'nowrap',
         userSelect: 'none',
         letterSpacing: '0.02em',
       }}
     >
       {text}
-    </div>
+    </div>,
+    getOverlayRoot()
   );
 };
 

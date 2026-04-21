@@ -1,4 +1,16 @@
 import React, { useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
+
+function getInteractiveOverlayRoot(): HTMLElement {
+  let root = document.getElementById('draw-widget-overlay-root-interactive');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'draw-widget-overlay-root-interactive';
+    root.style.cssText = 'position:relative;z-index:2147483647;';
+    document.body.appendChild(root);
+  }
+  return root;
+}
 
 export interface ShapeInfoData {
   shapeType: string; // 'circle' | 'extent' | 'polygon' | 'freepolygon' | 'point' | 'polyline' | ...
@@ -104,7 +116,6 @@ const ShapeInfoPopup: React.FC<ShapeInfoPopupProps> = ({ open, data, screenX, sc
     color: '#e8e8e8',
     borderRadius: '6px',
     boxShadow: '0 4px 20px rgba(0,0,0,0.55)',
-    zIndex: 10000,
     fontFamily: "'Avenir Next LT Pro', Arial, sans-serif",
     fontSize: '12px',
     overflow: 'hidden',
@@ -175,7 +186,7 @@ const ShapeInfoPopup: React.FC<ShapeInfoPopupProps> = ({ open, data, screenX, sc
     data.radiusNM !== undefined ||
     data.totalLengthM !== undefined;
 
-  return (
+  return ReactDOM.createPortal(
     <div ref={panelRef} style={panelStyle} role="dialog" aria-label="Shape information">
       {/* Header */}
       <div style={headerStyle}>
@@ -240,7 +251,8 @@ const ShapeInfoPopup: React.FC<ShapeInfoPopupProps> = ({ open, data, screenX, sc
           )}
         </div>
       )}
-    </div>
+    </div>,
+    getInteractiveOverlayRoot()
   );
 };
 

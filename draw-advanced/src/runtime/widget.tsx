@@ -4023,6 +4023,13 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 		});
 	};
 
+	_viewScreenToViewport = (screenPt: { x: number; y: number }): { x: number; y: number } => {
+		const view = this.sketchViewModel?.view;
+		if (!view?.container) return screenPt;
+		const rect = (view.container as HTMLElement).getBoundingClientRect();
+		return { x: screenPt.x + rect.left, y: screenPt.y + rect.top };
+	};
+
 	_updateDrawingTooltip = (geometry: __esri.Geometry) => {
 		const view = this.sketchViewModel?.view;
 		const tool = this.state.currentTool;
@@ -4058,10 +4065,11 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 					: `R: ${radiusNM.toFixed(2)} NM`;
 
 				const screenPt = view.toScreen({ x: edgeX, y: edgeY, spatialReference: poly.spatialReference } as any);
+				const vpt0 = this._viewScreenToViewport(screenPt);
 				this.setState({
 					drawingTooltipVisible: true,
-					drawingTooltipX: screenPt.x,
-					drawingTooltipY: screenPt.y,
+					drawingTooltipX: vpt0.x,
+					drawingTooltipY: vpt0.y,
 					drawingTooltipText: text,
 				});
 
@@ -4095,10 +4103,11 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 				const hM = geometryEngine.geodesicLength(hLine, 'meters');
 
 				const screenPt = view.toScreen({ x: ext.xmax, y: ext.ymax, spatialReference: sr } as any);
+				const vpt1 = this._viewScreenToViewport(screenPt);
 				this.setState({
 					drawingTooltipVisible: true,
-					drawingTooltipX: screenPt.x,
-					drawingTooltipY: screenPt.y,
+					drawingTooltipX: vpt1.x,
+					drawingTooltipY: vpt1.y,
 					drawingTooltipText: `W: ${formatDist(wM)}  H: ${formatDist(hM)}`,
 				});
 
@@ -4136,10 +4145,11 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 
 				const segM = geometryEngine.geodesicLength(segLine, 'meters');
 				const screenPt = view.toScreen({ x: lastPt[0], y: lastPt[1], spatialReference: sr } as any);
+				const vpt2 = this._viewScreenToViewport(screenPt);
 				this.setState({
 					drawingTooltipVisible: true,
-					drawingTooltipX: screenPt.x,
-					drawingTooltipY: screenPt.y,
+					drawingTooltipX: vpt2.x,
+					drawingTooltipY: vpt2.y,
 					drawingTooltipText: formatDist(segM),
 				});
 
@@ -4163,10 +4173,11 @@ export default class Widget extends React.PureComponent<AllWidgetProps<IMConfig>
 
 				const segM = geometryEngine.geodesicLength(segLine, 'meters');
 				const screenPt = view.toScreen({ x: lastPt[0], y: lastPt[1], spatialReference: sr } as any);
+				const vpt3 = this._viewScreenToViewport(screenPt);
 				this.setState({
 					drawingTooltipVisible: true,
-					drawingTooltipX: screenPt.x,
-					drawingTooltipY: screenPt.y,
+					drawingTooltipX: vpt3.x,
+					drawingTooltipY: vpt3.y,
 					drawingTooltipText: formatDist(segM),
 				});
 

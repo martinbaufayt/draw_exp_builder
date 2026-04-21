@@ -26,7 +26,9 @@ A feature-rich drawing widget for [ArcGIS Experience Builder](https://developers
 
 ### Live drawing tooltip
 
-A real-time overlay near the cursor appears while drawing and disappears automatically when the shape is completed:
+A real-time overlay near the cursor appears while drawing and disappears automatically when the shape is completed.
+The tooltip and info popup use a dedicated overlay container at the top of the browser stacking order, ensuring they always render above map layers in multi-layer ExB apps.
+
 
 | Tool | Tooltip content |
 |---|---|
@@ -136,6 +138,7 @@ Key ArcGIS JS SDK APIs: `SketchViewModel`, `GraphicsLayer`, `geometryEngine`, `c
 | `add_polygons_coordinates` | Adds center coordinates display (WGS84 Lon/Lat) on measurement labels |
 | `feature/live-drawing-tooltip` | Adds real-time cursor tooltip (radius, segment length) during drawing |
 | `feature/shape-info-popup` | Adds click popup with DD/DMS/DDM/MGRS coordinates and measurements |
+| `fix/overlay-zindex` | Fixes tooltip and popup visibility when map layers are present (overlay stacking context) |
 
 ---
 
